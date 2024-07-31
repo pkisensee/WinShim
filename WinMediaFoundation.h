@@ -18,12 +18,11 @@
 #include <cassert>
 #include <filesystem>
 
-#include "ComPtr.h"
-
 #define NOMINMAX 1
-#include "mfapi.h"
-#include "mfidl.h"
-#include "mfreadwrite.h"
+#include "ComPtr.h"
+#include "MFapi.h"
+#include "MFidl.h"
+#include "MFReadWrite.h"
 
 // Link with these media libraries
 #pragma comment(lib, "mfplat.lib")
@@ -51,15 +50,15 @@ public:
 
   WinMediaFoundation()
   {
-    HRESULT hr;
-    CHECK_HR( hr = CoInitializeEx( 0, COINIT_MULTITHREADED ) );
-    CHECK_HR( hr = MFStartup( MF_VERSION ) );
+  HRESULT hr;
+  CHECK_HR( hr = CoInitializeEx( 0, COINIT_MULTITHREADED ) );
+  CHECK_HR( hr = MFStartup( MF_VERSION ) );
   }
 
   ~WinMediaFoundation()
   {
-    MFShutdown();
-    CoUninitialize();
+  MFShutdown();
+  CoUninitialize();
   }
 
 };
@@ -72,14 +71,14 @@ public:
 
   WinMediaType()
   {
-    HRESULT hr;
-    CHECK_HR( hr = MFCreateMediaType( &( *this ) ) );
+  HRESULT hr;
+  CHECK_HR( hr = MFCreateMediaType( &( *this ) ) );
   }
 
   void SetGuid( const GUID& key, const GUID& value )
   {
-    HRESULT hr;
-    CHECK_HR( hr = Get()->SetGUID( key, value ) );
+  HRESULT hr;
+  CHECK_HR( hr = Get()->SetGUID( key, value ) );
   }
 };
 
@@ -94,9 +93,9 @@ private:
   {
     HRESULT hr;
     DWORD bytes = 0;
-    CHECK_HR( hr = Get()->Lock( &mpData, NULL, &bytes ) );
+    CHECK_HR( hr = Get()->Lock( &pData_, NULL, &bytes ) );
     bytesLocked = bytes;
-    return mpData;
+    return pData_;
   }
 
   void Unlock()
@@ -105,7 +104,7 @@ private:
     CHECK_HR( hr = Get()->Unlock() );
   }
 
-  uint8_t* mpData = nullptr;
+  uint8_t* pData_ = nullptr;
 };
 
 class WinMediaBufferLock
@@ -115,27 +114,27 @@ public:
 
   explicit WinMediaBufferLock( WinMediaBuffer& mediaBuffer )
     :
-    mMediaBuffer( mediaBuffer )
+    mediaBuffer_( mediaBuffer )
   {
-    mpData = mMediaBuffer.Lock( mBytesLocked );
+    pData_ = mediaBuffer_.Lock( bytesLocked_ );
   }
 
   ~WinMediaBufferLock()
   {
-    mMediaBuffer.Unlock();
+    mediaBuffer_.Unlock();
   }
 
   uint8_t* GetData() const {
-    return mpData;
+    return pData_;
   }
   uint32_t GetSize() const {
-    return mBytesLocked;
+    return bytesLocked_;
   }
 
 private:
-  WinMediaBuffer& mMediaBuffer;
-  uint8_t* mpData = nullptr;
-  uint32_t mBytesLocked = 0;
+  WinMediaBuffer& mediaBuffer_;
+  uint8_t* pData_ = nullptr;
+  uint32_t bytesLocked_ = 0;
 
 };
 
@@ -254,13 +253,13 @@ public:
     std::wstring songWide = song.make_preferred().generic_wstring();
     MF_OBJECT_TYPE ObjectType = MF_OBJECT_INVALID;
     HRESULT hr;
-    CHECK_HR( hr = sourceResolver->CreateObjectFromURL( songWide.c_str(), MF_RESOLUTION_MEDIASOURCE, NULL, &ObjectType, &mpSource ) );
-    CHECK_HR( hr = mpSource->QueryInterface( __uuidof( IMFMediaSource ), (void**)&( *this ) ) );
+    CHECK_HR( hr = sourceResolver->CreateObjectFromURL( songWide.c_str(), MF_RESOLUTION_MEDIASOURCE, NULL, &ObjectType, &pSource_ ) );
+    CHECK_HR( hr = pSource_->QueryInterface( __uuidof( IMFMediaSource ), (void**)&( *this ) ) );
   }
 
 private:
 
-  ComPtr<IUnknown> mpSource;
+  ComPtr<IUnknown> pSource_;
 
 };
 
@@ -279,8 +278,8 @@ public:
   uint64_t GetDurationInMilliseconds() const
   {
     // get duration in 100-nanosecond units
-    MFTIME duration;
-    HRESULT hr;
+    MFTIME duration = {};
+    HRESULT hr = {};
     CHECK_HR( hr = ( *this )->GetUINT64( MF_PD_DURATION, (UINT64*)&duration ) );
     uint64_t milliSeconds = static_cast<uint64_t>(duration) / 10000;
     return milliSeconds;

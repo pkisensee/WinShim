@@ -24,81 +24,81 @@ template<typename I>
 class ComPtr
 {
 public:
-    ComPtr() : mp( nullptr )
-    {
-        static_assert( std::is_base_of<IUnknown, I>::value, "I needs to be IUnknown based" );
-    }
+  ComPtr() : p_( nullptr )
+  {
+    static_assert( std::is_base_of<IUnknown, I>::value, "I needs to be IUnknown based" );
+  }
 
-    explicit ComPtr( I* p ) : mp( p )
-    {
-        static_assert( std::is_base_of<IUnknown, I>::value, "I needs to be IUnknown based" );
-        if( mp )
-            mp->AddRef();
-    }
+  explicit ComPtr( I* p ) : p_( p )
+  {
+    static_assert( std::is_base_of<IUnknown, I>::value, "I needs to be IUnknown based" );
+    if( p_ )
+      p_->AddRef();
+  }
 
-    ComPtr( const ComPtr& cp) : mp( cp.mp )
-    {
-        static_assert( std::is_base_of<IUnknown, I>::value, "I needs to be IUnknown based" );
-        if( mp )
-            mp->AddRef();
-    }
+  ComPtr( const ComPtr& cp) : p_( cp.p_ )
+  {
+    static_assert( std::is_base_of<IUnknown, I>::value, "I needs to be IUnknown based" );
+    if( p_ )
+      p_->AddRef();
+  }
 
-    ComPtr( ComPtr&& cp ) = delete; // not currently needed, but could be replaced with code below
-    /*{
-        mp = cp.mp;
-        cp.mp = nullptr;
-    }*/
+  ComPtr( ComPtr&& cp ) = delete; // not currently needed, but could be replaced with code below
+  /*{
+    p_ = cp.p_;
+    cp.p_ = nullptr;
+  }*/
 
-    // not currently needed
-    ComPtr& operator=( const ComPtr& ) = delete; 
-    ComPtr& operator=( ComPtr&& ) = delete;
+  // not currently needed
+  ComPtr& operator=( const ComPtr& ) = delete; 
+  ComPtr& operator=( ComPtr&& ) = delete;
 
-    I* operator=( I* p )
-    {
-        if( mp )
-            mp->Release();
-        mp = p;
-        if( mp )
-            mp->AddRef();
-        return mp;
-    }
+  I* operator=( I* p )
+  {
+    if( p_ )
+      p_->Release();
+    p_ = p;
+    if( p_ )
+      p_->AddRef();
+    return p_;
+  }
 
-    ~ComPtr()
-    {
-        if( mp )
-            mp->Release();
-    }
+  ~ComPtr()
+  {
+    if( p_ )
+      p_->Release();
+  }
 
-    operator I* () const
-    {
-        assert( mp );
-        return mp;
-    }
+  operator I* () const
+  {
+    assert( p_ );
+    return p_;
+  }
 
-    I* operator->() const
-    {
-        assert( mp );
-        return mp;
-    }
+  I* operator->() const
+  {
+    assert( p_ );
+    return p_;
+  }
 
-    I** operator&()
-    {
-        assert( mp == nullptr );
-        return &mp;
-    }
+  I** operator&()
+  {
+    assert( p_ == nullptr );
+    return &p_;
+  }
 
-    I* Get()
-    {
-        return mp;
-    }
+  I* Get()
+  {
+    return p_;
+  }
 
-    const I* Get() const
-    {
-        return mp;
-    }
+  const I* Get() const
+  {
+    return p_;
+  }
 
 private:
-    I* mp;
+  I* p_;
 
 }; // class ComPtr
 

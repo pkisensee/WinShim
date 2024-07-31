@@ -15,17 +15,17 @@
 ///////////////////////////////////////////////////////////////////////////////
 
 #pragma once
-#include "WaveOut.h"
 #include <algorithm>
 #include <cassert>
 #include <climits>
+
 #include "Util.h"
 #include "PcmData.h"
+#include "WaveOut.h"
 #include "WinWaveOut.h"
 
-// Windows-specific
 #define NOMINMAX 1
-#include "windows.h"
+#include "Windows.h"
 
 ///////////////////////////////////////////////////////////////////////////////
 //
@@ -37,194 +37,201 @@ namespace PKIsensee
 {
 
 constexpr size_t kWaveBufferBytes = sizeof( uint16_t ) * 2 * 44100; // 1 second for 16-bit stereo 44.1 KHz
-constexpr size_t kMaxWaveBuffers = 16;
-constexpr double kMillisecondsPerSecond = 1000.0;
+[[maybe_unused]] constexpr size_t kMaxWaveBuffers = 16;
 
 class WaveOut::Impl
 {
 public:
-    std::vector<WAVEHDR> waveHdr;
-    WinWaveOut           waveOut;
-    PcmData              pcmData;
-    const uint8_t*       nextPcm = nullptr;
-    uint32_t             lastStartOffsetBytes = 0;
-    bool                 isPlaying = false;
-    bool                 hasEnded = false;
+  std::vector<WAVEHDR> waveHdr;
+  WinWaveOut           waveOut;
+  PcmData              pcmData;
+  const uint8_t*       nextPcm = nullptr;
+  uint32_t             lastStartOffsetBytes = 0;
+  bool                 isPlaying = false;
+  bool                 hasEnded = false;
 
-    void Clear()
-    {
-        waveHdr.clear();
-        waveOut.Close();
-        nextPcm = nullptr;
-        lastStartOffsetBytes = 0;
-        isPlaying = false;
-        hasEnded = false;
-    }
+  WaveOut::Impl() = default;
+  WaveOut::Impl( const WaveOut::Impl& ) = delete;
+  WaveOut::Impl( WaveOut::Impl&& ) = delete;
+  WaveOut::Impl& operator=( const WaveOut::Impl& ) = delete;
+  WaveOut::Impl& operator=( WaveOut::Impl&& ) = delete;
+
+  void Clear()
+  {
+    waveHdr.clear();
+    waveOut.Close();
+    nextPcm = nullptr;
+    lastStartOffsetBytes = 0;
+    isPlaying = false;
+    hasEnded = false;
+  }
 };
 
 ///////////////////////////////////////////////////////////////////////////////
 //
 // Handy helper sets the pointer/len and returns number of bytes filled
-// Also hides nasty Windows cast
 
 size_t SetWaveHeader( WAVEHDR& wh, const uint8_t* pcmPtr, size_t bytes )
 {
-    assert( pcmPtr != nullptr );
-    auto bytesFilled = std::min( kWaveBufferBytes, bytes );
-    wh.dwBufferLength = static_cast<DWORD>( bytesFilled );
-    wh.lpData = reinterpret_cast<LPSTR>( const_cast<uint8_t*>( pcmPtr ) );
-    return bytesFilled;
+  assert( pcmPtr != nullptr );
+  auto bytesFilled = std::min( kWaveBufferBytes, bytes );
+  wh.dwBufferLength = static_cast<DWORD>( bytesFilled );
+  wh.lpData = reinterpret_cast<LPSTR>( const_cast<uint8_t*>( pcmPtr ) );
+  return bytesFilled;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 
 WaveOut::WaveOut()
-    : mImpl( new WaveOut::Impl, []( WaveOut::Impl* w ) { delete w; } )
+  : impl_( new WaveOut::Impl, []( WaveOut::Impl* w ) { delete w; } )
 {
 }
 
 bool WaveOut::Open( const PcmData& pcmData, Util::Event& callbackEvent )
 {
-    Close();
-    mImpl->pcmData = pcmData;
+  Close();
+  impl_->pcmData = pcmData;
 
-    WAVEFORMATEX wfx;
-    wfx.wFormatTag      = WAVE_FORMAT_PCM;
-    wfx.nChannels       = static_cast<uint16_t>( pcmData.GetChannelCountAsInt() );
-    wfx.wBitsPerSample  = static_cast<uint16_t>( pcmData.GetBitsPerSample() );
-    wfx.nSamplesPerSec  = pcmData.GetSamplesPerSecond();
-    wfx.nBlockAlign     = static_cast<uint16_t>( pcmData.GetBlockAlignment() );
-    wfx.nAvgBytesPerSec = wfx.nSamplesPerSec * wfx.nBlockAlign;
-    wfx.cbSize          = 0; // not used for PCM
+  WAVEFORMATEX wfx = { 0 };
+  wfx.wFormatTag      = WAVE_FORMAT_PCM;
+  wfx.nChannels       = static_cast<uint16_t>( pcmData.GetChannelCountAsInt() );
+  wfx.wBitsPerSample  = static_cast<uint16_t>( pcmData.GetBitsPerSample() );
+  wfx.nSamplesPerSec  = pcmData.GetSamplesPerSecond();
+  wfx.nBlockAlign     = static_cast<uint16_t>( pcmData.GetBlockAlignment() );
+  wfx.nAvgBytesPerSec = wfx.nSamplesPerSec * wfx.nBlockAlign;
+  wfx.cbSize          = 0; // not used for PCM
 
-    // callbackEvent is signalled when it's time to refill the next audio buffer
-    return mImpl->waveOut.Open( wfx, callbackEvent.GetHandle() );
+  // callbackEvent is signalled when it's time to refill the next audio buffer
+  return impl_->waveOut.Open( wfx, callbackEvent.GetHandle() );
 }
+
+// Chromium (link above) supports a minimum of 2 and a maximum of 4 buffers (waveBufferCount)
 
 void WaveOut::Prepare( uint32_t positionMs, size_t waveBufferCount )
 {
-    assert( waveBufferCount > 1 );
-    assert( waveBufferCount <= kMaxWaveBuffers );
-    mImpl->waveHdr.resize( waveBufferCount );
-    mImpl->waveOut.Reset();
-    Pause(); // pause so no events are fired
+  assert( waveBufferCount > 1 );
+  assert( waveBufferCount <= kMaxWaveBuffers );
+  static_cast<void>(kMaxWaveBuffers); // [[maybe_unused]] above not working
+  impl_->waveHdr.resize( waveBufferCount );
+  impl_->waveOut.Reset();
+  Pause(); // pause so no events are fired
 
-    auto* pcmPtr = mImpl->pcmData.GetPtr();
-    auto pcmBytes = mImpl->pcmData.GetSize();
+  auto* pcmPtr = impl_->pcmData.GetPtr();
+  auto pcmBytes = impl_->pcmData.GetSize();
 
-    auto byteOffset = mImpl->pcmData.MillisecondsToBytes( positionMs );
-    assert( byteOffset <= pcmBytes );
-    auto bytesLeft = pcmBytes - byteOffset;
-    mImpl->nextPcm = pcmPtr + byteOffset;
-    for( auto i = 0u; i < mImpl->waveHdr.size(); ++i )
-    {
-        // Set buffers to point at audio data
-        auto& wh = mImpl->waveHdr[ i ];
-        wh = { 0 };
-        auto bytesFilled = SetWaveHeader( wh, mImpl->nextPcm, bytesLeft );
+  auto byteOffset = impl_->pcmData.MillisecondsToBytes( positionMs );
+  assert( byteOffset <= pcmBytes );
+  auto bytesLeft = pcmBytes - byteOffset;
+  impl_->nextPcm = pcmPtr + byteOffset;
+  for( auto i = 0u; i < impl_->waveHdr.size(); ++i )
+  {
+    // Set buffers to point at audio data
+    auto& wh = impl_->waveHdr[ i ];
+    wh = { 0 };
+    auto bytesFilled = SetWaveHeader( wh, impl_->nextPcm, bytesLeft );
 
-        bytesLeft -= bytesFilled;
-        assert( bytesLeft < pcmBytes );
-        mImpl->nextPcm += bytesFilled;
+    bytesLeft -= bytesFilled;
+    assert( bytesLeft < pcmBytes );
+    impl_->nextPcm += bytesFilled;
 
-        // Inform OS about this WAVEHDR and send buffer to audio driver
-        mImpl->waveOut.Prepare( wh ); 
-        mImpl->waveOut.Write( wh );
-    }
-    mImpl->lastStartOffsetBytes = byteOffset;
+    // Inform OS about this WAVEHDR and send buffer to audio driver
+    impl_->waveOut.Prepare( wh ); 
+    impl_->waveOut.Write( wh );
+  }
+  impl_->lastStartOffsetBytes = byteOffset;
 }
 
 void WaveOut::Start()
 {
-    mImpl->waveOut.Restart();
-    mImpl->isPlaying = true;
-    mImpl->hasEnded = false;
+  impl_->waveOut.Restart();
+  impl_->isPlaying = true;
+  impl_->hasEnded = false;
 }
 
 void WaveOut::Pause()
 {
-    mImpl->waveOut.Pause();
-    mImpl->isPlaying = false;
+  impl_->waveOut.Pause();
+  impl_->isPlaying = false;
 }
 
 void WaveOut::Update() // invoke when callbackEvent is signalled
 {
-    auto* pcmPtr = mImpl->pcmData.GetPtr();
-    auto pcmBytes = mImpl->pcmData.GetSize();
-    auto waveBufferCount = mImpl->waveHdr.size();
+  auto* pcmPtr = impl_->pcmData.GetPtr();
+  auto pcmBytes = impl_->pcmData.GetSize();
+  auto waveBufferCount = impl_->waveHdr.size();
 
-    // No more data to queue
-    if( mImpl->nextPcm >= pcmPtr + pcmBytes )
-    {
-        // If all buffers are complete, wave is done playing
-        uint32_t isWaveDonePlaying = WHDR_DONE;
-        for( auto i = 0u; i < waveBufferCount; ++i )
-            isWaveDonePlaying &= (mImpl->waveHdr[ i ].dwFlags & WHDR_DONE);
-        if( isWaveDonePlaying )
-            mImpl->hasEnded = true;
-        return;
-    }
-
-    // Data remains to queue
-    auto bytesLeft = pcmPtr - mImpl->nextPcm + pcmBytes;
-    assert( bytesLeft );
+  // No more data to queue
+  if( impl_->nextPcm >= pcmPtr + pcmBytes )
+  {
+    // If all buffers are complete, wave is done playing
+    uint32_t isWaveDonePlaying = WHDR_DONE;
     for( auto i = 0u; i < waveBufferCount; ++i )
-    {
-        auto& wh = mImpl->waveHdr[ i ];
-        if( wh.dwFlags & WHDR_DONE ) // if this is the buffer that was signalled
-        {
-            // Refill it with new data
-            auto bytesFilled = SetWaveHeader( wh, mImpl->nextPcm, bytesLeft );
-            bytesLeft -= bytesFilled;
-            assert( bytesLeft < pcmBytes );
-            mImpl->nextPcm += bytesFilled;
+      isWaveDonePlaying &= (impl_->waveHdr[ i ].dwFlags & WHDR_DONE);
+    if( isWaveDonePlaying )
+      impl_->hasEnded = true;
+    return;
+  }
 
-            // waveOut.Prepare() is not necessary since we're reusing the buffers
-            mImpl->waveOut.Write( wh );
-            break;
-        }
+  // Data remains to queue
+  auto bytesLeft = pcmPtr - impl_->nextPcm + pcmBytes;
+  assert( bytesLeft );
+  for( auto i = 0u; i < waveBufferCount; ++i )
+  {
+    auto& wh = impl_->waveHdr[ i ];
+    if( wh.dwFlags & WHDR_DONE ) // if this is the buffer that was signalled
+    {
+      // Refill it with new data
+      auto bytesFilled = SetWaveHeader( wh, impl_->nextPcm, bytesLeft );
+      bytesLeft -= bytesFilled;
+      assert( bytesLeft < pcmBytes );
+      impl_->nextPcm += bytesFilled;
+
+      // waveOut.Prepare() is not necessary since we're reusing the buffers
+      impl_->waveOut.Write( wh );
+      break;
     }
+  }
 }
 
 bool WaveOut::IsPlaying() const
 {
-    return mImpl->isPlaying;
+  return impl_->isPlaying;
 }
 
 bool WaveOut::HasEnded() const
 {
-    return mImpl->hasEnded;
+  return impl_->hasEnded;
 }
 
 void WaveOut::Close()
 {
-    mImpl->waveOut.Reset();
-    for( auto i = 0u; i < mImpl->waveHdr.size(); ++i )
-    {
-        auto& wh = mImpl->waveHdr[ i ];
-        // waveOutReset() leaves buffers in unpredictable state; fix it here
-        // before calling waveOutUnprepare()
-        wh.dwFlags = WHDR_PREPARED; 
-        mImpl->waveOut.Unprepare( wh );
-    }
-    mImpl->Clear();
+  impl_->waveOut.Reset();
+  for( auto i = 0u; i < impl_->waveHdr.size(); ++i )
+  {
+    auto& wh = impl_->waveHdr[ i ];
+    // waveOutReset() leaves buffers in unpredictable state; fix it here
+    // before calling waveOutUnprepare()
+    wh.dwFlags = WHDR_PREPARED; 
+    impl_->waveOut.Unprepare( wh );
+  }
+  impl_->Clear();
 }
 
 WaveOut::Volume WaveOut::GetVolume() const // left, right
 {
-    return mImpl->waveOut.GetVolume();
+  return impl_->waveOut.GetVolume();
 }
 
 void WaveOut::SetVolume( const WaveOut::Volume& volume ) // left, right
 {
-    mImpl->waveOut.SetVolume( volume );
+  impl_->waveOut.SetVolume( volume );
 }
 
 uint32_t WaveOut::GetPositionMs() const
 {
-    auto bytePosition = mImpl->lastStartOffsetBytes;
-    bytePosition += mImpl->waveOut.GetPositionBytes();
-    return mImpl->pcmData.BytesToMilliseconds( bytePosition );
+  auto bytePosition = impl_->lastStartOffsetBytes;
+  bytePosition += impl_->waveOut.GetPositionBytes();
+  return impl_->pcmData.BytesToMilliseconds( bytePosition );
 }
 
 } // namespace PKIsensee

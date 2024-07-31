@@ -31,7 +31,7 @@ namespace Util
 class Window::Impl
 {
 public:
-    HWND window = NULL;
+  HWND window = NULL;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -39,22 +39,25 @@ public:
 // The deleter must handle both closing the handle (ha) and freeing the pimpl
 
 Window::Window( void* windowHandle )
-    : mImpl( new Impl, []( Impl* w ) { delete w; } )
+  : impl_( new Impl, []( Impl* w ) { delete w; } )
 {
-    mImpl->window = reinterpret_cast<HWND>( windowHandle );
+  impl_->window = reinterpret_cast<HWND>( windowHandle );
 }
 
 template<>
 HWND Window::GetHandle<HWND>()
 {
-    return mImpl->window;
+  return impl_->window;
 }
 
+#pragma warning(push)
+#pragma warning(disable : 5266) // const qualifier on return type has no effect
 template<>
 const HWND Window::GetHandle<HWND>() const
 {
-    return mImpl->window;
+  return impl_->window;
 }
+#pragma warning(pop)
 
 }; // end namespace Util
 

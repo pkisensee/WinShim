@@ -31,7 +31,7 @@ namespace Util
 class Event::Impl
 {
 public:
-    HANDLE event = NULL;
+  HANDLE event = NULL;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -39,33 +39,33 @@ public:
 // The deleter must handle both closing the handle (ha) and freeing the pimpl
 
 Event::Event()
-    : mImpl( new Impl, []( Impl* e ) 
-        { 
-            if( e->event != NULL )
-                ::CloseHandle( e->event ); 
-            delete e; 
-        } )
+  : impl_( new Impl, []( Impl* e ) 
+    { 
+      if( e->event != NULL )
+        ::CloseHandle( e->event ); 
+      delete e; 
+    } )
 {
-    mImpl->event = ::CreateEvent( NULL, FALSE, FALSE, NULL ); // auto reset event
-    assert( mImpl->event != NULL );
+  impl_->event = ::CreateEvent( NULL, FALSE, FALSE, NULL ); // auto reset event
+  assert( impl_->event != NULL );
 }
 
 void* Event::GetHandle()
 {
-    return mImpl->event;
+  return impl_->event;
 }
 
 void Event::Reset()
 {
-    ::ResetEvent( mImpl->event );
+  ::ResetEvent( impl_->event );
 }
 
 bool Event::IsSignalled( uint32_t timeoutMs ) const // true if signalled, false if timeout
 {
-    DWORD result = ::WaitForSingleObject( mImpl->event, timeoutMs );
-    assert( result != WAIT_ABANDONED );
-    assert( result != WAIT_FAILED );
-    return ( result == WAIT_OBJECT_0 );
+  DWORD result = ::WaitForSingleObject( impl_->event, timeoutMs );
+  assert( result != WAIT_ABANDONED );
+  assert( result != WAIT_FAILED );
+  return ( result == WAIT_OBJECT_0 );
 }
 
 }; // end namespace Util

@@ -1,6 +1,6 @@
 ///////////////////////////////////////////////////////////////////////////////
 //
-//  WinUtil.h
+//  Process.cpp
 //
 //  Copyright © Pete Isensee (PKIsensee@msn.com).
 //  All rights reserved worldwide.
@@ -17,8 +17,9 @@
 #pragma once
 
 #include <string>
+
 #define NOMINMAX 1
-#include <windows.h>
+#include "Windows.h"
 #include "Process.h"
 
 namespace PKIsensee
@@ -26,27 +27,27 @@ namespace PKIsensee
 
 ///////////////////////////////////////////////////////////////////////////////
 
-namespace WinUtil
+namespace WinUtil // TODO consider different name
 {
 
 void StartProcess( const std::string& commandLine ) // e.g. "notepad.exe foo.log"
 {
-    LPCSTR appName = NULL;
-    LPSECURITY_ATTRIBUTES processAttribs = NULL;
-    LPSECURITY_ATTRIBUTES threadAttribs = NULL;
-    BOOL inheritHandles = FALSE;
-    DWORD creationFlags = 0;
-    LPVOID environment = NULL;
-    LPCSTR currDir = NULL;
-    STARTUPINFOA si = { sizeof( si ), NULL };
-    PROCESS_INFORMATION pi = { 0 };
+  LPCSTR appName = NULL;
+  LPSECURITY_ATTRIBUTES processAttribs = NULL;
+  LPSECURITY_ATTRIBUTES threadAttribs = NULL;
+  BOOL inheritHandles = FALSE;
+  DWORD creationFlags = 0;
+  LPVOID environment = NULL;
+  LPCSTR currDir = NULL;
+  STARTUPINFOA si = { sizeof( si ), NULL };
+  PROCESS_INFORMATION pi = { 0 };
 
-    ::CreateProcessA( appName, const_cast<LPSTR>( commandLine.c_str() ),
-        processAttribs, threadAttribs, inheritHandles, creationFlags,
-        environment, currDir, &si, &pi );
+  ::CreateProcessA( appName, const_cast<LPSTR>( commandLine.c_str() ),
+                    processAttribs, threadAttribs, inheritHandles, creationFlags,
+                    environment, currDir, &si, &pi );
 
-    ::CloseHandle( pi.hProcess );
-    ::CloseHandle( pi.hThread );
+  ::CloseHandle( pi.hProcess );
+  ::CloseHandle( pi.hThread );
 }
 
 } // namespace WinUtil
