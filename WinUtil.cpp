@@ -79,11 +79,18 @@ std::string GetRegistryValue( const std::string& registryPath,
 
 ///////////////////////////////////////////////////////////////////////////////
 // 
-// e.g. "notepad.exe foo.log"
+// Launch another process
+// 
+//    e.g. "notepad.exe foo.log"
+// 
+// If the first parameter has spaces, it must be enclosed in quotes
+//    e.g. "\"c:\\Program Files\\MyApp.exe\" -C -S"
+//
+// Command line must be null-terminated, so std::string_view not supported
 
-void StartProcess( const std::string& commandLine )
+bool StartProcess( const std::string& commandLine )
 {
-  LPCSTR appName = NULL;
+  LPCSTR appName = NULL; // appName is specified in command line
   LPSECURITY_ATTRIBUTES processAttribs = NULL;
   LPSECURITY_ATTRIBUTES threadAttribs = NULL;
   BOOL inheritHandles = FALSE;
@@ -92,13 +99,62 @@ void StartProcess( const std::string& commandLine )
   LPCSTR currDir = NULL;
   STARTUPINFOA si = { sizeof( si ), NULL };
   PROCESS_INFORMATION pi = { 0 };
+  LPSTR cmdLine = const_cast<LPSTR>( commandLine.c_str() );
 
-  ::CreateProcessA( appName, const_cast<LPSTR>( commandLine.c_str() ),
+  auto result = ::CreateProcessA( appName, cmdLine,
       processAttribs, threadAttribs, inheritHandles, creationFlags,
       environment, currDir, &si, &pi );
 
+  // useful for debugging failure conditions
+  [[maybe_unused]] auto lastError = ::GetLastError();
+
   ::CloseHandle( pi.hProcess );
   ::CloseHandle( pi.hThread );
+
+  return ( result != 0 );
+}
+
+///////////////////////////////////////////////////////////////////////////////
+//
+// Invoke the shell
+//
+// Examples:
+// 
+//    Verb    File          Result
+//------------------------------------------------------------------------------
+//            file.pdf      opens file.pdf in default PDF viewer
+//    open    list.txt      opens list.txt in the default editor, e.g. Notepad
+//    play    playlist.wpl  plays playlist.wpl using default media player
+//    print   file.docx     prints file.docx using Word
+// 
+// See ShellExecuteEx in Windows documentation for all verbs. If nothing
+// specified, the default is "open".
+//
+// String params must be null-terminated, so std::string_view not supported
+
+bool StartShell( const std::string& verb, const std::string& file )
+{
+  assert( !file.empty() );
+
+  SHELLEXECUTEINFOA shellExec = { sizeof( SHELLEXECUTEINFOA ) };
+  shellExec.hwnd = ::GetDesktopWindow();
+  shellExec.fMask = SEE_MASK_FLAG_NO_UI | // no error dialogs
+                    SEE_MASK_NOASYNC;     // req when no message loop
+  shellExec.lpVerb = verb.empty() ? NULL : verb.c_str();
+  shellExec.lpFile = file.c_str();
+  shellExec.lpParameters = NULL; // not currently supported, but could be added as a param
+  shellExec.lpDirectory = NULL;  // start in current directory
+  shellExec.nShow = SW_SHOWNORMAL;
+
+  // Recommended by Windows documentation
+  ::CoInitializeEx( NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE );
+
+  auto result = ::ShellExecuteExA( &shellExec ); // Start the shell
+
+  // useful for debugging failure conditions
+  [[maybe_unused]] auto lastError = ::GetLastError();
+
+  return result != FALSE;
 }
 
 ///////////////////////////////////////////////////////////////////////////////

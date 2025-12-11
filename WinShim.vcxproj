@@ -26,7 +26,6 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Event.cpp" />
-    <ClCompile Include="Process.cpp" />
     <ClCompile Include="WaveOut.cpp" />
     <ClCompile Include="WinUtil.cpp" />
     <ClCompile Include="WinWindow.cpp" />
