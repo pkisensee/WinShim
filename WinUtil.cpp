@@ -18,6 +18,7 @@
 
 #include <cassert>
 #include <string>
+#include <utility>
 
 #define NOMINMAX 1
 #include "Windows.h"
@@ -147,7 +148,8 @@ bool StartShell( const std::string& verb, const std::string& file )
   shellExec.nShow = SW_SHOWNORMAL;
 
   // Recommended by Windows documentation
-  ::CoInitializeEx( NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE );
+  [[maybe_unused]] HRESULT hResult = ::CoInitializeEx( NULL, 
+    COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE );
 
   auto result = ::ShellExecuteExA( &shellExec ); // Start the shell
 
